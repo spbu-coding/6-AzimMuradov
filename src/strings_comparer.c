@@ -65,6 +65,15 @@ static const comparator_func_t COMPARATOR_FUNCTIONS[] = {
 static const size_t COMPARATOR_NUMBER = sizeof COMPARATOR_NAMES / sizeof *COMPARATOR_NAMES;
 
 
+/*------------------------------------------------------- Utils ------------------------------------------------------*/
+
+void free_lines(strings_array_t lines, array_size_t line_number) {
+    if (lines == NULL) return;
+    for (array_size_t i = 0; i < line_number; ++i) free(lines[i]);
+    free(lines);
+}
+
+
 /*------------------------------------------- Parse Command Line Arguments -------------------------------------------*/
 
 task_6_error_code_t parse_cl_arguments(int argc, char **argv, program_configuration_t *configuration) {
@@ -112,7 +121,10 @@ task_6_error_code_t read_lines_from_file(program_configuration_t configuration, 
 
     for (array_size_t i = 0; i < configuration.line_number; ++i) {
         if (fgets(lines[i], MAX_INPUT_STRING_SIZE, file) == NULL) {
-            return feof(file) ? TASK_6_E_FREAD_FEOF : ferror(file) ? TASK_6_E_FREAD_FERROR : TASK_6_E_OTHER;
+            task_6_error_code_t error_code =
+                feof(file) ? TASK_6_E_FREAD_FEOF : ferror(file) ? TASK_6_E_FREAD_FERROR : TASK_6_E_OTHER;
+            fclose(file);
+            return error_code;
         }
     }
 
@@ -140,10 +152,16 @@ task_6_error_code_t write_lines_to_file(program_configuration_t configuration, s
 
     if (configuration.line_number != 0) {
         for (array_size_t i = 0; i < configuration.line_number; ++i) {
-            if (fputs(lines[i], file) == -1) return TASK_6_E_FWRITE_FERROR;
+            if (fputs(lines[i], file) == -1) {
+                fclose(file);
+                return TASK_6_E_FWRITE_FERROR;
+            }
         }
     } else {
-        if (fputs("\n", file) == -1) return TASK_6_E_FWRITE_FERROR;
+        if (fputs("\n", file) == -1) {
+            fclose(file);
+            return TASK_6_E_FWRITE_FERROR;
+        }
     }
 
     fclose(file);
@@ -157,23 +175,34 @@ task_6_error_code_t run_strings_comparer(program_configuration_t configuration) 
     strings_array_t lines = NULL;
 
     if (configuration.line_number != 0) {
-        lines = malloc(configuration.line_number * sizeof *lines);
+        lines = calloc(configuration.line_number, sizeof *lines);
         if (lines == NULL) return TASK_6_E_MEM_ALLOC;
         for (array_size_t i = 0; i < configuration.line_number; ++i) {
             lines[i] = calloc(MAX_INPUT_STRING_SIZE, sizeof(char));
-            if (lines[i] == NULL) return TASK_6_E_MEM_ALLOC;
+            if (lines[i] == NULL) {
+                free_lines(lines, configuration.line_number);
+                return TASK_6_E_MEM_ALLOC;
+            }
         }
 
-        if ((error_code = read_lines_from_file(configuration, lines))) return error_code;
+        if ((error_code = read_lines_from_file(configuration, lines))) {
+            free_lines(lines, configuration.line_number);
+            return error_code;
+        }
 
         configuration.algorithm(lines, configuration.line_number, configuration.comparator);
-        if (curr_error) return curr_error;
+        if (curr_error) {
+            free_lines(lines, configuration.line_number);
+            return curr_error;
+        }
     }
 
-    if ((error_code = write_lines_to_file(configuration, lines))) return error_code;
+    if ((error_code = write_lines_to_file(configuration, lines))) {
+        free_lines(lines, configuration.line_number);
+        return error_code;
+    }
 
-    for (array_size_t i = 0; i < configuration.line_number; ++i) free(lines[i]);
-    free(lines);
+    free_lines(lines, configuration.line_number);
 
     return TASK_6_E_OK;
 }
