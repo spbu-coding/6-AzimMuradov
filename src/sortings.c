@@ -166,6 +166,10 @@ static void radix_core_part(
     memcpy(cnt_copy, cnt, (CHAR_COUNT) * sizeof *cnt);
 
     strings_array_t c = malloc((r - l) * sizeof *c);
+    if (c == NULL) {
+        curr_error = TASK_6_E_MEM_ALLOC;
+        return;
+    }
     for (array_size_t i = l; i < r; ++i) {
         c[--cnt[cmp_proxy[(unsigned char) lines[i][d]]]] = lines[i];
     }
@@ -188,3 +192,4 @@ void radix(strings_array_t lines, array_size_t count, comparator_func_t comp) {
 /*------------------------------------------------------ Undefs ------------------------------------------------------*/
 
 #undef CHAR_COUNT
+
