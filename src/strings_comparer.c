@@ -75,7 +75,7 @@ task_6_error_code_t parse_cl_arguments(int argc, char **argv, program_configurat
 
     char *end_ptr = NULL;
     long long ret_val = strtoll(argv[0], &end_ptr, 0);
-    if (errno == ERANGE || end_ptr != argv[0] + strlen(argv[0]) || ret_val <= 0) return TASK_6_E_WRONG_CL_ARGS_FORMAT;
+    if (errno == ERANGE || end_ptr != argv[0] + strlen(argv[0]) || ret_val < 0) return TASK_6_E_WRONG_CL_ARGS_FORMAT;
     configuration->line_number = ret_val;
 
     configuration->input_filename = argv[1];
@@ -138,8 +138,12 @@ task_6_error_code_t write_lines_to_file(program_configuration_t configuration, s
     FILE *file = fopen(configuration.output_filename, "w");
     if (file == NULL) return TASK_6_E_FOPEN;
 
-    for (array_size_t i = 0; i < configuration.line_number; ++i) {
-        if (fputs(lines[i], file) == -1) return TASK_6_E_FWRITE_FERROR;
+    if (configuration.line_number != 0) {
+        for (array_size_t i = 0; i < configuration.line_number; ++i) {
+            if (fputs(lines[i], file) == -1) return TASK_6_E_FWRITE_FERROR;
+        }
+    } else {
+        if (fputs("\n", file) == -1) return TASK_6_E_FWRITE_FERROR;
     }
 
     fclose(file);
@@ -150,17 +154,21 @@ task_6_error_code_t write_lines_to_file(program_configuration_t configuration, s
 task_6_error_code_t run_strings_comparer(program_configuration_t configuration) {
     task_6_error_code_t error_code;
 
-    strings_array_t lines = malloc(configuration.line_number * sizeof *lines);
-    if (lines == NULL) return TASK_6_E_MEM_ALLOC;
-    for (array_size_t i = 0; i < configuration.line_number; ++i) {
-        lines[i] = calloc(MAX_INPUT_STRING_SIZE, sizeof(char));
-        if (lines[i] == NULL) return TASK_6_E_MEM_ALLOC;
+    strings_array_t lines = NULL;
+
+    if (configuration.line_number != 0) {
+        lines = malloc(configuration.line_number * sizeof *lines);
+        if (lines == NULL) return TASK_6_E_MEM_ALLOC;
+        for (array_size_t i = 0; i < configuration.line_number; ++i) {
+            lines[i] = calloc(MAX_INPUT_STRING_SIZE, sizeof(char));
+            if (lines[i] == NULL) return TASK_6_E_MEM_ALLOC;
+        }
+
+        if ((error_code = read_lines_from_file(configuration, lines))) return error_code;
+
+        configuration.algorithm(lines, configuration.line_number, configuration.comparator);
+        if (curr_error) return curr_error;
     }
-
-    if ((error_code = read_lines_from_file(configuration, lines))) return error_code;
-
-    configuration.algorithm(lines, configuration.line_number, configuration.comparator);
-    if (curr_error) return curr_error;
 
     if ((error_code = write_lines_to_file(configuration, lines))) return error_code;
 
@@ -189,3 +197,4 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
+
